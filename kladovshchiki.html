@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ЗП кладовщиков РЦ — мин / макс</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #f3f4f6;
+      --ink: #1f2937;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --card: #ffffff;
+      --peak: #dc2626;
+      --peak-soft: #fee2e2;
+      --min: #2563eb;
+      --min-soft: #dbeafe;
+      --max: #dc2626;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.45;
+    }
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 28px 18px 64px; }
+    a.back { color: var(--muted); font-size: 0.9rem; text-decoration: none; }
+    a.back:hover { color: var(--ink); }
+    header h1 { margin: 10px 0 6px; font-size: 1.75rem; letter-spacing: -0.02em; }
+    header p { margin: 0; color: var(--muted); }
+    .meta { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip {
+      background: #fff; border: 1px solid var(--line); border-radius: 999px;
+      padding: 4px 12px; font-size: 0.85rem; font-weight: 600; color: #374151;
+    }
+    .chip.max { background: var(--peak-soft); color: var(--peak); border-color: #fecaca; }
+    .chip.min { background: var(--min-soft); color: var(--min); border-color: #bfdbfe; }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 12px; margin: 24px 0;
+    }
+    .stat {
+      background: var(--card); border: 1px solid var(--line);
+      border-radius: 12px; padding: 14px 16px;
+    }
+    .stat .label { color: var(--muted); font-size: 0.82rem; }
+    .stat .value { font-size: 1.35rem; font-weight: 700; margin-top: 4px; }
+    .stat.max { background: var(--peak-soft); border-color: #fecaca; }
+    .stat.max .value, .stat.max .label { color: #991b1b; }
+    .stat.min { background: var(--min-soft); border-color: #bfdbfe; }
+    .stat.min .value, .stat.min .label { color: #1e40af; }
+    section {
+      background: var(--card); border: 1px solid var(--line);
+      border-radius: 14px; padding: 18px; margin: 16px 0;
+    }
+    section h2 { margin: 0 0 4px; font-size: 1.15rem; }
+    section .sub { margin: 0 0 14px; color: var(--muted); font-size: 0.9rem; }
+    .chart-box { position: relative; height: 360px; }
+    .legend-hint {
+      display: flex; flex-wrap: wrap; gap: 14px; margin: 0 0 10px;
+      font-size: 0.82rem; color: var(--muted);
+    }
+    .legend-hint span { display: inline-flex; align-items: center; gap: 6px; }
+    .swatch { width: 12px; height: 12px; border-radius: 2px; display: inline-block; }
+    .swatch.min { background: var(--min); }
+    .swatch.max { background: var(--max); }
+    .swatch.avg { background: #6b7280; }
+    .swatch.tyumen { background: #059669; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); }
+    th { color: var(--muted); font-weight: 600; font-size: 0.78rem; text-transform: uppercase; }
+    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .max-cell { color: var(--max); font-weight: 700; }
+    .min-cell { color: var(--min); font-weight: 700; }
+    tr.hi-max td { background: var(--peak-soft); }
+    tr.hi-min td { background: var(--min-soft); }
+    .notes { margin-top: 20px; color: var(--muted); font-size: 0.88rem; }
+    .notes ul { margin: 8px 0 0; padding-left: 18px; }
+    footer { margin-top: 28px; color: var(--muted); font-size: 0.82rem; }
+    @media (max-width: 640px) {
+      .chart-box { height: 300px; }
+      header h1 { font-size: 1.4rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <a class="back" href="./">← Общий отчёт по должностям</a>
+    <header>
+      <h1>ЗП кладовщиков РЦ</h1>
+      <p>Реальные минимальная и максимальная планки начислений · без ФИО</p>
+      <div class="meta" id="meta"></div>
+    </header>
+
+    <div class="stats" id="stats"></div>
+
+    <section>
+      <h2>Мин / макс / средняя по месяцам</h2>
+      <p class="sub">Диапазон начислений кладовщиков в каждом месяце</p>
+      <div class="legend-hint">
+        <span><i class="swatch min"></i> минимум</span>
+        <span><i class="swatch max"></i> максимум</span>
+        <span><i class="swatch avg"></i> средняя</span>
+        <span><i class="swatch tyumen"></i> рынок Тюмени (~64 500 ₽)</span>
+      </div>
+      <div class="chart-box"><canvas id="rangeChart"></canvas></div>
+    </section>
+
+    <section>
+      <h2>Сводка по месяцам</h2>
+      <p class="sub">Синим — месяц с абсолютным минимумом периода · красным — с абсолютным максимумом</p>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Месяц</th>
+              <th class="num">Людей</th>
+              <th class="num">Мин, ₽</th>
+              <th class="num">Макс, ₽</th>
+              <th class="num">Размах, ₽</th>
+              <th class="num">Средняя, ₽</th>
+            </tr>
+          </thead>
+          <tbody id="monthTable"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2>Все начисления кладовщиков (обезличено)</h2>
+      <p class="sub">Отсортированные суммы по месяцу — видно реальную «вилку» без ФИО</p>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Месяц</th>
+              <th>Начисления по возрастанию, ₽</th>
+            </tr>
+          </thead>
+          <tbody id="distTable"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <div class="notes">
+      <strong>Методика</strong>
+      <ul id="notes"></ul>
+    </div>
+    <footer>Источник: ведомости ЗП РЦ · только должность «Кладовщик»</footer>
+  </div>
+
+  <script>
+    const fmt = (n) => new Intl.NumberFormat('ru-RU').format(Math.round(n));
+    const money = (n) => fmt(n) + ' ₽';
+
+    fetch('kladovshchiki_data.json?v=20260811c')
+      .then(r => r.json())
+      .then(data => {
+        const s = data.summary;
+        document.getElementById('meta').innerHTML = [
+          `<span class="chip">${s.people} кладовщиков</span>`,
+          `<span class="chip">${s.person_months} чел.-мес.</span>`,
+          `<span class="chip min">мин периода: ${money(s.min)}</span>`,
+          `<span class="chip max">макс периода: ${money(s.max)}</span>`
+        ].join('');
+
+        document.getElementById('stats').innerHTML = `
+          <div class="stat min"><div class="label">Минимум за период</div><div class="value">${money(s.min)}</div></div>
+          <div class="stat max"><div class="label">Максимум за период</div><div class="value">${money(s.max)}</div></div>
+          <div class="stat"><div class="label">Средняя</div><div class="value">${money(s.avg)}</div></div>
+          <div class="stat"><div class="label">Медиана</div><div class="value">${money(s.median)}</div></div>
+          <div class="stat"><div class="label">Рынок Тюмени</div><div class="value">${money(data.tyumen_avg)}</div></div>
+        `;
+
+        document.getElementById('notes').innerHTML =
+          data.notes.map(n => `<li>${n}</li>`).join('');
+
+        document.getElementById('monthTable').innerHTML = data.monthly.map(m => {
+          const cls = m.has_period_max ? 'hi-max' : (m.has_period_min ? 'hi-min' : '');
+          const mark = m.has_period_max ? ' · МАКС периода' : (m.has_period_min ? ' · МИН периода' : '');
+          return `<tr class="${cls}">
+            <td>${m.label}${mark}</td>
+            <td class="num">${m.n}</td>
+            <td class="num min-cell">${fmt(m.min)}</td>
+            <td class="num max-cell">${fmt(m.max)}</td>
+            <td class="num">${fmt(m.max - m.min)}</td>
+            <td class="num">${fmt(m.avg)}</td>
+          </tr>`;
+        }).join('');
+
+        document.getElementById('distTable').innerHTML = data.monthly.map(m => {
+          const cells = m.values_sorted.map(v => {
+            let c = '';
+            if (v === m.max) c = 'max-cell';
+            if (v === m.min) c = 'min-cell';
+            return `<span class="${c}">${fmt(v)}</span>`;
+          }).join(' · ');
+          return `<tr><td>${m.label}</td><td style="font-variant-numeric:tabular-nums">${cells}</td></tr>`;
+        }).join('');
+
+        const labels = data.monthly.map(m => m.label);
+        const mins = data.monthly.map(m => m.min);
+        const maxs = data.monthly.map(m => m.max);
+        const avgs = data.monthly.map(m => m.avg);
+        const tyumen = data.monthly.map(() => data.tyumen_avg);
+
+        new Chart(document.getElementById('rangeChart'), {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [
+              {
+                label: 'Максимум, ₽',
+                data: maxs,
+                borderColor: '#dc2626',
+                backgroundColor: '#dc2626',
+                tension: 0.2,
+                borderWidth: 2.5,
+                pointRadius: maxs.map(v => v === s.max ? 8 : 4),
+                pointBackgroundColor: '#dc2626'
+              },
+              {
+                label: 'Средняя, ₽',
+                data: avgs,
+                borderColor: '#6b7280',
+                backgroundColor: '#6b7280',
+                tension: 0.2,
+                borderWidth: 2,
+                borderDash: [4, 4],
+                pointRadius: 3
+              },
+              {
+                label: 'Минимум, ₽',
+                data: mins,
+                borderColor: '#2563eb',
+                backgroundColor: '#2563eb',
+                tension: 0.2,
+                borderWidth: 2.5,
+                pointRadius: mins.map(v => v === s.min ? 8 : 4),
+                pointBackgroundColor: '#2563eb'
+              },
+              {
+                label: 'Тюмень (рынок), ₽',
+                data: tyumen,
+                borderColor: '#059669',
+                backgroundColor: '#059669',
+                borderWidth: 2,
+                borderDash: [6, 4],
+                pointRadius: 0
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { position: 'bottom' },
+              tooltip: {
+                callbacks: {
+                  label: (c) => `${c.dataset.label}: ${money(c.raw)}`
+                }
+              }
+            },
+            scales: {
+              y: {
+                title: { display: true, text: 'Начисление, ₽' },
+                ticks: { callback: (v) => fmt(v) },
+                grid: { color: '#e5e7eb' }
+              },
+              x: {
+                title: { display: true, text: 'Месяц' },
+                grid: { display: false }
+              }
+            }
+          }
+        });
+      })
+      .catch(err => {
+        document.body.innerHTML = '<p style="padding:24px">Ошибка загрузки: ' + err + '</p>';
+      });
+  </script>
+</body>
+</html>
