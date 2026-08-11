@@ -98,8 +98,14 @@
     }
     .swatch.gray { background: var(--gray-bar); }
     .swatch.peak { background: var(--peak); }
+    .swatch.rc { background: #4b5563; }
+    .swatch.tyumen { background: #2563eb; }
+    .delta-neg { color: #b91c1c; font-weight: 600; }
+    .delta-pos { color: #15803d; font-weight: 600; }
+    .chart-box.tall { height: 380px; }
     @media (max-width: 640px) {
       .chart-box { height: 280px; }
+      .chart-box.tall { height: 320px; }
       header h1 { font-size: 1.4rem; }
     }
   </style>
@@ -136,8 +142,32 @@
 
     <section>
       <h2>Динамика средней ЗП по должностям</h2>
-      <p class="sub">Месячные средние · точки пика каждой должности выделены цветом</p>
-      <div class="chart-box"><canvas id="monthlyByPos"></canvas></div>
+      <p class="sub">Месячные средние по должностям · цветные серии · пик должности — крупная точка</p>
+      <div class="chart-box tall"><canvas id="monthlyByPos"></canvas></div>
+    </section>
+
+    <section>
+      <h2>Справочно: средняя ЗП по должностям в Тюмени</h2>
+      <p class="sub" id="tyumenSub">Рынок Тюмени vs факт РЦ · ориентир по вакансиям</p>
+      <div class="legend-hint">
+        <span><i class="swatch rc"></i> РЦ (факт)</span>
+        <span><i class="swatch tyumen"></i> Тюмень (рынок)</span>
+      </div>
+      <div class="chart-box"><canvas id="tyumenCompare"></canvas></div>
+      <div style="overflow-x:auto; margin-top: 8px">
+        <table>
+          <thead>
+            <tr>
+              <th>Должность</th>
+              <th class="num">РЦ, ₽</th>
+              <th class="num">Тюмень, ₽</th>
+              <th class="num">Разница</th>
+              <th class="num">%</th>
+            </tr>
+          </thead>
+          <tbody id="tyumenTable"></tbody>
+        </table>
+      </div>
     </section>
 
     <section>
@@ -170,7 +200,6 @@
               <th>Месяц</th>
               <th class="num">Людей</th>
               <th class="num">Средняя, ₽</th>
-              <th class="num">Медиана, ₽</th>
               <th class="num">Сумма, ₽</th>
             </tr>
           </thead>
@@ -193,7 +222,7 @@
     const GRAY_DARK = '#6b7280';
     const GRAY_LINE = '#4b5563';
     const PEAK = '#dc2626';
-    const GRAY_SERIES = ['#9ca3af', '#6b7280', '#4b5563', '#d1d5db'];
+    const COLOR_SERIES = ['#2563eb', '#059669', '#d97706', '#7c3aed', '#db2777', '#0891b2'];
 
     fetch('report_data.json')
       .then(r => r.json())
@@ -235,9 +264,25 @@
             <td>${m.label}${m.ym === peakYm ? ' · пик' : ''}</td>
             <td class="num">${m.people}</td>
             <td class="num ${m.ym === peakYm ? 'peak-cell' : ''}">${fmt(m.avg)}</td>
-            <td class="num">${fmt(m.median)}</td>
             <td class="num">${fmt(m.total)}</td>
           </tr>`).join('');
+
+        if (data.tyumen_market) {
+          document.getElementById('tyumenSub').textContent =
+            data.tyumen_market.source;
+          document.getElementById('tyumenTable').innerHTML = data.tyumen_market.by_position.map(r => {
+            const cls = r.delta < 0 ? 'delta-neg' : 'delta-pos';
+            const sign = r.delta > 0 ? '+' : '';
+            return `
+              <tr>
+                <td>${r.position}</td>
+                <td class="num">${fmt(r.rc_avg)}</td>
+                <td class="num">${fmt(r.tyumen_avg)}</td>
+                <td class="num ${cls}">${sign}${fmt(r.delta)}</td>
+                <td class="num ${cls}">${sign}${r.delta_pct}%</td>
+              </tr>`;
+          }).join('');
+        }
 
         const chartDefaults = {
           responsive: true,
@@ -330,16 +375,18 @@
           data: {
             labels: data.months,
             datasets: main.map((p, i) => {
+              const color = COLOR_SERIES[i % COLOR_SERIES.length];
               const peakVal = Math.max(...p.monthly_avg.filter(v => v != null));
               return {
                 label: p.position,
                 data: p.monthly_avg,
-                borderColor: GRAY_SERIES[i % GRAY_SERIES.length],
-                backgroundColor: GRAY_SERIES[i % GRAY_SERIES.length],
+                borderColor: color,
+                backgroundColor: color,
                 tension: 0.25,
                 spanGaps: true,
+                borderWidth: 2.5,
                 pointRadius: p.monthly_avg.map(v => v === peakVal ? 7 : 3),
-                pointBackgroundColor: p.monthly_avg.map(v => v === peakVal ? PEAK : GRAY_SERIES[i % GRAY_SERIES.length]),
+                pointBackgroundColor: p.monthly_avg.map(v => v === peakVal ? PEAK : color),
                 pointBorderColor: '#fff',
                 pointBorderWidth: 2
               };
@@ -350,7 +397,7 @@
             plugins: {
               legend: {
                 position: 'bottom',
-                labels: { color: GRAY_DARK }
+                labels: { color: GRAY_DARK, usePointStyle: true }
               },
               tooltip: {
                 callbacks: {
@@ -376,6 +423,50 @@
             }
           }
         });
+
+        if (data.tyumen_market) {
+          const tm = data.tyumen_market.by_position;
+          new Chart(document.getElementById('tyumenCompare'), {
+            type: 'bar',
+            data: {
+              labels: tm.map(r => r.position),
+              datasets: [
+                {
+                  label: 'РЦ (факт), ₽',
+                  data: tm.map(r => r.rc_avg),
+                  backgroundColor: '#4b5563',
+                  borderWidth: 0,
+                  borderRadius: 4
+                },
+                {
+                  label: 'Тюмень (рынок), ₽',
+                  data: tm.map(r => r.tyumen_avg),
+                  backgroundColor: '#2563eb',
+                  borderWidth: 0,
+                  borderRadius: 4
+                }
+              ]
+            },
+            options: {
+              ...chartDefaults,
+              plugins: {
+                legend: { position: 'bottom', labels: { color: GRAY_DARK } },
+                tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${money(c.raw)}` } }
+              },
+              scales: {
+                y: {
+                  ...axisGray,
+                  title: { display: true, text: 'Средняя ЗП, ₽', color: GRAY_DARK }
+                },
+                x: {
+                  title: { display: true, text: 'Должность', color: GRAY_DARK },
+                  ticks: { color: GRAY_DARK, maxRotation: 35, minRotation: 0 },
+                  grid: { display: false }
+                }
+              }
+            }
+          });
+        }
       })
       .catch(err => {
         document.body.innerHTML = '<p style="padding:24px">Не удалось загрузить report_data.json: ' + err + '</p>';
