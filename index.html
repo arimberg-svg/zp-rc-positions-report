@@ -115,6 +115,7 @@
     <header>
       <h1 id="title">ЗП РЦ по должностям</h1>
       <p id="subtitle"></p>
+      <p class="sub" style="margin-top:8px">Обновлено: 11.08.2026 · сравнение с рынком Тюмени · цветная динамика по должностям</p>
       <div class="meta" id="meta"></div>
     </header>
 
@@ -224,7 +225,7 @@
     const PEAK = '#dc2626';
     const COLOR_SERIES = ['#2563eb', '#059669', '#d97706', '#7c3aed', '#db2777', '#0891b2'];
 
-    fetch('report_data.json')
+    fetch('report_data.json?v=20260811b')
       .then(r => r.json())
       .then(data => {
         document.getElementById('title').textContent = data.title;
