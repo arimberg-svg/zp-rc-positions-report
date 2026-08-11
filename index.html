@@ -7,14 +7,17 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   <style>
     :root {
-      --bg: #f6f4ef;
-      --ink: #1c1a16;
-      --muted: #5c574e;
-      --line: #d9d3c7;
-      --card: #fffdf8;
-      --accent: #0f6b5c;
-      --accent-soft: #d8ebe6;
-      --peak: #b45309;
+      --bg: #f3f4f6;
+      --ink: #1f2937;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --card: #ffffff;
+      --gray-bar: #9ca3af;
+      --gray-line: #6b7280;
+      --gray-soft: #e5e7eb;
+      --peak: #dc2626;
+      --peak-soft: #fee2e2;
+      --peak-mid: #f87171;
     }
     * { box-sizing: border-box; }
     body {
@@ -25,16 +28,22 @@
       line-height: 1.45;
     }
     .wrap { max-width: 1080px; margin: 0 auto; padding: 28px 18px 64px; }
-    header h1 { margin: 0 0 6px; font-size: 1.75rem; letter-spacing: -0.02em; }
+    header h1 { margin: 0 0 6px; font-size: 1.75rem; letter-spacing: -0.02em; color: #111827; }
     header p { margin: 0; color: var(--muted); }
     .meta { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px; }
     .chip {
-      background: var(--accent-soft);
-      color: var(--accent);
+      background: #fff;
+      color: #374151;
+      border: 1px solid var(--line);
       border-radius: 999px;
       padding: 4px 12px;
       font-size: 0.85rem;
       font-weight: 600;
+    }
+    .chip.peak {
+      background: var(--peak-soft);
+      color: var(--peak);
+      border-color: #fecaca;
     }
     .stats {
       display: grid;
@@ -49,7 +58,12 @@
       padding: 14px 16px;
     }
     .stat .label { color: var(--muted); font-size: 0.82rem; }
-    .stat .value { font-size: 1.35rem; font-weight: 700; margin-top: 4px; }
+    .stat .value { font-size: 1.35rem; font-weight: 700; margin-top: 4px; color: #111827; }
+    .stat.peak {
+      background: var(--peak-soft);
+      border-color: #fecaca;
+    }
+    .stat.peak .label { color: #991b1b; }
     .stat.peak .value { color: var(--peak); }
     section {
       background: var(--card);
@@ -58,17 +72,32 @@
       padding: 18px 18px 10px;
       margin: 16px 0;
     }
-    section h2 { margin: 0 0 4px; font-size: 1.15rem; }
+    section h2 { margin: 0 0 4px; font-size: 1.15rem; color: #111827; }
     section .sub { margin: 0 0 14px; color: var(--muted); font-size: 0.9rem; }
     .chart-box { position: relative; height: 340px; }
     table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
     th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); }
     th { color: var(--muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; }
     td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
-    tr.peak-row td { background: #fff7ed; }
+    tr.peak-row td {
+      background: var(--peak-soft);
+      color: #7f1d1d;
+      font-weight: 600;
+    }
+    .peak-cell { color: var(--peak); font-weight: 700; }
     .notes { margin-top: 20px; color: var(--muted); font-size: 0.88rem; }
     .notes ul { margin: 8px 0 0; padding-left: 18px; }
     footer { margin-top: 28px; color: var(--muted); font-size: 0.82rem; }
+    .legend-hint {
+      display: flex; align-items: center; gap: 16px;
+      margin: 0 0 10px; font-size: 0.82rem; color: var(--muted);
+    }
+    .legend-hint span { display: inline-flex; align-items: center; gap: 6px; }
+    .swatch {
+      width: 12px; height: 12px; border-radius: 2px; display: inline-block;
+    }
+    .swatch.gray { background: var(--gray-bar); }
+    .swatch.peak { background: var(--peak); }
     @media (max-width: 640px) {
       .chart-box { height: 280px; }
       header h1 { font-size: 1.4rem; }
@@ -88,24 +117,32 @@
     <section>
       <h2>Средняя ЗП по должностям</h2>
       <p class="sub">Среднее начисление на человека-месяц за весь период · без руководителя РЦ</p>
+      <div class="legend-hint">
+        <span><i class="swatch gray"></i> обычные значения</span>
+        <span><i class="swatch peak"></i> максимум среди должностей</span>
+      </div>
       <div class="chart-box"><canvas id="avgByPos"></canvas></div>
     </section>
 
     <section>
       <h2>Пиковые месяцы: средняя ЗП по РЦ</h2>
-      <p class="sub">Динамика средней начисленной ЗП по месяцам · пик выделен</p>
+      <p class="sub">Динамика средней начисленной ЗП по месяцам · пик выделен красным</p>
+      <div class="legend-hint">
+        <span><i class="swatch gray"></i> средняя по месяцам</span>
+        <span><i class="swatch peak"></i> пиковый месяц</span>
+      </div>
       <div class="chart-box"><canvas id="monthlyOverall"></canvas></div>
     </section>
 
     <section>
       <h2>Динамика средней ЗП по должностям</h2>
-      <p class="sub">Месячные средние · пропуски = нет сотрудников этой должности в ведомости</p>
+      <p class="sub">Месячные средние · точки пика каждой должности выделены цветом</p>
       <div class="chart-box"><canvas id="monthlyByPos"></canvas></div>
     </section>
 
     <section>
       <h2>Сводка по должностям</h2>
-      <p class="sub">Средняя / медиана / пиковый месяц</p>
+      <p class="sub">Средняя / медиана / пиковый месяц — пиковые значения цветом</p>
       <div style="overflow-x:auto">
         <table>
           <thead>
@@ -152,6 +189,11 @@
   <script>
     const fmt = (n) => new Intl.NumberFormat('ru-RU').format(Math.round(n));
     const money = (n) => fmt(n) + ' ₽';
+    const GRAY = '#9ca3af';
+    const GRAY_DARK = '#6b7280';
+    const GRAY_LINE = '#4b5563';
+    const PEAK = '#dc2626';
+    const GRAY_SERIES = ['#9ca3af', '#6b7280', '#4b5563', '#d1d5db'];
 
     fetch('report_data.json')
       .then(r => r.json())
@@ -160,10 +202,10 @@
         document.getElementById('subtitle').textContent =
           `${data.org} · ${data.department} · ${data.period}`;
         document.getElementById('meta').innerHTML = [
-          `${data.summary.positions} должностей`,
-          `${data.summary.person_months} чел.-мес.`,
-          `пик: ${data.summary.peak_month.label}`
-        ].map(t => `<span class="chip">${t}</span>`).join('');
+          `<span class="chip">${data.summary.positions} должностей</span>`,
+          `<span class="chip">${data.summary.person_months} чел.-мес.</span>`,
+          `<span class="chip peak">пик: ${data.summary.peak_month.label}</span>`
+        ].join('');
 
         document.getElementById('stats').innerHTML = `
           <div class="stat"><div class="label">Средняя ЗП за период</div><div class="value">${money(data.summary.overall_avg)}</div></div>
@@ -176,26 +218,37 @@
           data.notes.map(n => `<li>${n}</li>`).join('');
 
         const peakYm = data.summary.peak_month.ym;
+        const maxPosAvg = Math.max(...data.positions.map(p => p.avg));
+
         document.getElementById('posTable').innerHTML = data.positions.map(p => `
-          <tr>
-            <td>${p.position}</td>
+          <tr class="${p.avg === maxPosAvg ? 'peak-row' : ''}">
+            <td>${p.position}${p.avg === maxPosAvg ? ' · макс.' : ''}</td>
             <td class="num">${p.person_months}</td>
-            <td class="num">${fmt(p.avg)}</td>
+            <td class="num ${p.avg === maxPosAvg ? 'peak-cell' : ''}">${fmt(p.avg)}</td>
             <td class="num">${fmt(p.median)}</td>
-            <td>${p.peak_label}</td>
-            <td class="num">${fmt(p.peak_avg)}</td>
+            <td class="peak-cell">${p.peak_label}</td>
+            <td class="num peak-cell">${fmt(p.peak_avg)}</td>
           </tr>`).join('');
 
         document.getElementById('monthTable').innerHTML = data.monthly.map(m => `
           <tr class="${m.ym === peakYm ? 'peak-row' : ''}">
             <td>${m.label}${m.ym === peakYm ? ' · пик' : ''}</td>
             <td class="num">${m.people}</td>
-            <td class="num">${fmt(m.avg)}</td>
+            <td class="num ${m.ym === peakYm ? 'peak-cell' : ''}">${fmt(m.avg)}</td>
             <td class="num">${fmt(m.median)}</td>
             <td class="num">${fmt(m.total)}</td>
           </tr>`).join('');
 
-        const palette = ['#0f6b5c', '#1d4ed8', '#b45309', '#7c3aed', '#be123c', '#0e7490'];
+        const chartDefaults = {
+          responsive: true,
+          maintainAspectRatio: false,
+          color: GRAY_DARK,
+        };
+        const axisGray = {
+          title: { color: GRAY_DARK },
+          ticks: { color: GRAY_DARK, callback: (v) => fmt(v) },
+          grid: { color: '#e5e7eb' }
+        };
 
         new Chart(document.getElementById('avgByPos'), {
           type: 'bar',
@@ -204,27 +257,22 @@
             datasets: [{
               label: 'Средняя ЗП, ₽',
               data: data.positions.map(p => p.avg),
-              backgroundColor: palette,
+              backgroundColor: data.positions.map(p => p.avg === maxPosAvg ? PEAK : GRAY),
               borderWidth: 0,
               borderRadius: 6
             }]
           },
           options: {
-            responsive: true,
-            maintainAspectRatio: false,
+            ...chartDefaults,
             plugins: {
               legend: { display: false },
-              tooltip: { callbacks: { label: (c) => money(c.raw) } }
+              tooltip: { callbacks: { label: (c) => money(c.raw) + (c.raw === maxPosAvg ? ' · максимум' : '') } }
             },
             scales: {
-              y: {
-                title: { display: true, text: 'Средняя ЗП, ₽' },
-                ticks: { callback: (v) => fmt(v) },
-                grid: { color: '#ece7dc' }
-              },
+              y: { ...axisGray, title: { display: true, text: 'Средняя ЗП, ₽', color: GRAY_DARK } },
               x: {
-                title: { display: true, text: 'Должность' },
-                ticks: { maxRotation: 35, minRotation: 0 },
+                title: { display: true, text: 'Должность', color: GRAY_DARK },
+                ticks: { color: GRAY_DARK, maxRotation: 35, minRotation: 0 },
                 grid: { display: false }
               }
             }
@@ -240,40 +288,36 @@
             datasets: [{
               label: 'Средняя ЗП РЦ, ₽',
               data: monthlyAvgs,
-              borderColor: '#0f6b5c',
-              backgroundColor: 'rgba(15,107,92,0.12)',
+              borderColor: GRAY_LINE,
+              backgroundColor: 'rgba(156,163,175,0.18)',
               fill: true,
               tension: 0.25,
-              pointRadius: monthlyAvgs.map((_, i) => i === peakIdx ? 7 : 3),
-              pointBackgroundColor: monthlyAvgs.map((_, i) => i === peakIdx ? '#b45309' : '#0f6b5c'),
+              pointRadius: monthlyAvgs.map((_, i) => i === peakIdx ? 8 : 3),
+              pointHoverRadius: 8,
+              pointBackgroundColor: monthlyAvgs.map((_, i) => i === peakIdx ? PEAK : GRAY_LINE),
               pointBorderColor: '#fff',
               pointBorderWidth: 2
             }]
           },
           options: {
-            responsive: true,
-            maintainAspectRatio: false,
+            ...chartDefaults,
             plugins: {
               legend: { display: false },
               tooltip: {
                 callbacks: {
-                  label: (c) => {
-                    const mark = c.dataIndex === peakIdx ? ' (пик)' : '';
-                    return money(c.raw) + mark;
-                  }
+                  label: (c) => money(c.raw) + (c.dataIndex === peakIdx ? ' (пик)' : '')
                 }
-              },
-              annotation: undefined
+              }
             },
             scales: {
               y: {
-                title: { display: true, text: 'Средняя ЗП, ₽' },
-                ticks: { callback: (v) => fmt(v) },
-                suggestedMin: 40000,
-                grid: { color: '#ece7dc' }
+                ...axisGray,
+                title: { display: true, text: 'Средняя ЗП, ₽', color: GRAY_DARK },
+                suggestedMin: 40000
               },
               x: {
-                title: { display: true, text: 'Месяц' },
+                title: { display: true, text: 'Месяц', color: GRAY_DARK },
+                ticks: { color: GRAY_DARK },
                 grid: { display: false }
               }
             }
@@ -285,31 +329,48 @@
           type: 'line',
           data: {
             labels: data.months,
-            datasets: main.map((p, i) => ({
-              label: p.position,
-              data: p.monthly_avg,
-              borderColor: palette[i % palette.length],
-              backgroundColor: palette[i % palette.length],
-              tension: 0.25,
-              spanGaps: true,
-              pointRadius: 3
-            }))
+            datasets: main.map((p, i) => {
+              const peakVal = Math.max(...p.monthly_avg.filter(v => v != null));
+              return {
+                label: p.position,
+                data: p.monthly_avg,
+                borderColor: GRAY_SERIES[i % GRAY_SERIES.length],
+                backgroundColor: GRAY_SERIES[i % GRAY_SERIES.length],
+                tension: 0.25,
+                spanGaps: true,
+                pointRadius: p.monthly_avg.map(v => v === peakVal ? 7 : 3),
+                pointBackgroundColor: p.monthly_avg.map(v => v === peakVal ? PEAK : GRAY_SERIES[i % GRAY_SERIES.length]),
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2
+              };
+            })
           },
           options: {
-            responsive: true,
-            maintainAspectRatio: false,
+            ...chartDefaults,
             plugins: {
-              legend: { position: 'bottom' },
-              tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${c.raw == null ? 'нет данных' : money(c.raw)}` } }
+              legend: {
+                position: 'bottom',
+                labels: { color: GRAY_DARK }
+              },
+              tooltip: {
+                callbacks: {
+                  label: (c) => {
+                    if (c.raw == null) return `${c.dataset.label}: нет данных`;
+                    const vals = c.dataset.data.filter(v => v != null);
+                    const isPeak = c.raw === Math.max(...vals);
+                    return `${c.dataset.label}: ${money(c.raw)}${isPeak ? ' · пик' : ''}`;
+                  }
+                }
+              }
             },
             scales: {
               y: {
-                title: { display: true, text: 'Средняя ЗП, ₽' },
-                ticks: { callback: (v) => fmt(v) },
-                grid: { color: '#ece7dc' }
+                ...axisGray,
+                title: { display: true, text: 'Средняя ЗП, ₽', color: GRAY_DARK }
               },
               x: {
-                title: { display: true, text: 'Месяц' },
+                title: { display: true, text: 'Месяц', color: GRAY_DARK },
+                ticks: { color: GRAY_DARK },
                 grid: { display: false }
               }
             }
