@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ЗП РЦ по должностям — авг 2025 — июл 2026</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #f6f4ef;
+      --ink: #1c1a16;
+      --muted: #5c574e;
+      --line: #d9d3c7;
+      --card: #fffdf8;
+      --accent: #0f6b5c;
+      --accent-soft: #d8ebe6;
+      --peak: #b45309;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.45;
+    }
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 28px 18px 64px; }
+    header h1 { margin: 0 0 6px; font-size: 1.75rem; letter-spacing: -0.02em; }
+    header p { margin: 0; color: var(--muted); }
+    .meta { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip {
+      background: var(--accent-soft);
+      color: var(--accent);
+      border-radius: 999px;
+      padding: 4px 12px;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+      margin: 24px 0;
+    }
+    .stat {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px 16px;
+    }
+    .stat .label { color: var(--muted); font-size: 0.82rem; }
+    .stat .value { font-size: 1.35rem; font-weight: 700; margin-top: 4px; }
+    .stat.peak .value { color: var(--peak); }
+    section {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 18px 18px 10px;
+      margin: 16px 0;
+    }
+    section h2 { margin: 0 0 4px; font-size: 1.15rem; }
+    section .sub { margin: 0 0 14px; color: var(--muted); font-size: 0.9rem; }
+    .chart-box { position: relative; height: 340px; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); }
+    th { color: var(--muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; }
+    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+    tr.peak-row td { background: #fff7ed; }
+    .notes { margin-top: 20px; color: var(--muted); font-size: 0.88rem; }
+    .notes ul { margin: 8px 0 0; padding-left: 18px; }
+    footer { margin-top: 28px; color: var(--muted); font-size: 0.82rem; }
+    @media (max-width: 640px) {
+      .chart-box { height: 280px; }
+      header h1 { font-size: 1.4rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1 id="title">ЗП РЦ по должностям</h1>
+      <p id="subtitle"></p>
+      <div class="meta" id="meta"></div>
+    </header>
+
+    <div class="stats" id="stats"></div>
+
+    <section>
+      <h2>Средняя ЗП по должностям</h2>
+      <p class="sub">Среднее начисление на человека-месяц за весь период · без руководителя РЦ</p>
+      <div class="chart-box"><canvas id="avgByPos"></canvas></div>
+    </section>
+
+    <section>
+      <h2>Пиковые месяцы: средняя ЗП по РЦ</h2>
+      <p class="sub">Динамика средней начисленной ЗП по месяцам · пик выделен</p>
+      <div class="chart-box"><canvas id="monthlyOverall"></canvas></div>
+    </section>
+
+    <section>
+      <h2>Динамика средней ЗП по должностям</h2>
+      <p class="sub">Месячные средние · пропуски = нет сотрудников этой должности в ведомости</p>
+      <div class="chart-box"><canvas id="monthlyByPos"></canvas></div>
+    </section>
+
+    <section>
+      <h2>Сводка по должностям</h2>
+      <p class="sub">Средняя / медиана / пиковый месяц</p>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Должность</th>
+              <th class="num">Чел.-мес.</th>
+              <th class="num">Средняя, ₽</th>
+              <th class="num">Медиана, ₽</th>
+              <th>Пиковый месяц</th>
+              <th class="num">Ср. в пике, ₽</th>
+            </tr>
+          </thead>
+          <tbody id="posTable"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2>Сводка по месяцам</h2>
+      <p class="sub">Средняя ЗП всех должностей (без руководителя РЦ)</p>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Месяц</th>
+              <th class="num">Людей</th>
+              <th class="num">Средняя, ₽</th>
+              <th class="num">Медиана, ₽</th>
+              <th class="num">Сумма, ₽</th>
+            </tr>
+          </thead>
+          <tbody id="monthTable"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <div class="notes">
+      <strong>Методика</strong>
+      <ul id="notes"></ul>
+    </div>
+    <footer>Источник: ведомости начисления ЗП РЦ · должности из табелей Т-13 · обезличенный отчёт</footer>
+  </div>
+
+  <script>
+    const fmt = (n) => new Intl.NumberFormat('ru-RU').format(Math.round(n));
+    const money = (n) => fmt(n) + ' ₽';
+
+    fetch('report_data.json')
+      .then(r => r.json())
+      .then(data => {
+        document.getElementById('title').textContent = data.title;
+        document.getElementById('subtitle').textContent =
+          `${data.org} · ${data.department} · ${data.period}`;
+        document.getElementById('meta').innerHTML = [
+          `${data.summary.positions} должностей`,
+          `${data.summary.person_months} чел.-мес.`,
+          `пик: ${data.summary.peak_month.label}`
+        ].map(t => `<span class="chip">${t}</span>`).join('');
+
+        document.getElementById('stats').innerHTML = `
+          <div class="stat"><div class="label">Средняя ЗП за период</div><div class="value">${money(data.summary.overall_avg)}</div></div>
+          <div class="stat"><div class="label">Медиана</div><div class="value">${money(data.summary.overall_median)}</div></div>
+          <div class="stat peak"><div class="label">Пиковый месяц</div><div class="value">${data.summary.peak_month.label}<br><span style="font-size:0.95rem">${money(data.summary.peak_month.avg)}</span></div></div>
+          <div class="stat"><div class="label">Минимальный месяц</div><div class="value">${data.summary.low_month.label}<br><span style="font-size:0.95rem">${money(data.summary.low_month.avg)}</span></div></div>
+        `;
+
+        document.getElementById('notes').innerHTML =
+          data.notes.map(n => `<li>${n}</li>`).join('');
+
+        const peakYm = data.summary.peak_month.ym;
+        document.getElementById('posTable').innerHTML = data.positions.map(p => `
+          <tr>
+            <td>${p.position}</td>
+            <td class="num">${p.person_months}</td>
+            <td class="num">${fmt(p.avg)}</td>
+            <td class="num">${fmt(p.median)}</td>
+            <td>${p.peak_label}</td>
+            <td class="num">${fmt(p.peak_avg)}</td>
+          </tr>`).join('');
+
+        document.getElementById('monthTable').innerHTML = data.monthly.map(m => `
+          <tr class="${m.ym === peakYm ? 'peak-row' : ''}">
+            <td>${m.label}${m.ym === peakYm ? ' · пик' : ''}</td>
+            <td class="num">${m.people}</td>
+            <td class="num">${fmt(m.avg)}</td>
+            <td class="num">${fmt(m.median)}</td>
+            <td class="num">${fmt(m.total)}</td>
+          </tr>`).join('');
+
+        const palette = ['#0f6b5c', '#1d4ed8', '#b45309', '#7c3aed', '#be123c', '#0e7490'];
+
+        new Chart(document.getElementById('avgByPos'), {
+          type: 'bar',
+          data: {
+            labels: data.positions.map(p => p.position),
+            datasets: [{
+              label: 'Средняя ЗП, ₽',
+              data: data.positions.map(p => p.avg),
+              backgroundColor: palette,
+              borderWidth: 0,
+              borderRadius: 6
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: { callbacks: { label: (c) => money(c.raw) } }
+            },
+            scales: {
+              y: {
+                title: { display: true, text: 'Средняя ЗП, ₽' },
+                ticks: { callback: (v) => fmt(v) },
+                grid: { color: '#ece7dc' }
+              },
+              x: {
+                title: { display: true, text: 'Должность' },
+                ticks: { maxRotation: 35, minRotation: 0 },
+                grid: { display: false }
+              }
+            }
+          }
+        });
+
+        const monthlyAvgs = data.monthly.map(m => m.avg);
+        const peakIdx = data.monthly.findIndex(m => m.ym === peakYm);
+        new Chart(document.getElementById('monthlyOverall'), {
+          type: 'line',
+          data: {
+            labels: data.months,
+            datasets: [{
+              label: 'Средняя ЗП РЦ, ₽',
+              data: monthlyAvgs,
+              borderColor: '#0f6b5c',
+              backgroundColor: 'rgba(15,107,92,0.12)',
+              fill: true,
+              tension: 0.25,
+              pointRadius: monthlyAvgs.map((_, i) => i === peakIdx ? 7 : 3),
+              pointBackgroundColor: monthlyAvgs.map((_, i) => i === peakIdx ? '#b45309' : '#0f6b5c'),
+              pointBorderColor: '#fff',
+              pointBorderWidth: 2
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: (c) => {
+                    const mark = c.dataIndex === peakIdx ? ' (пик)' : '';
+                    return money(c.raw) + mark;
+                  }
+                }
+              },
+              annotation: undefined
+            },
+            scales: {
+              y: {
+                title: { display: true, text: 'Средняя ЗП, ₽' },
+                ticks: { callback: (v) => fmt(v) },
+                suggestedMin: 40000,
+                grid: { color: '#ece7dc' }
+              },
+              x: {
+                title: { display: true, text: 'Месяц' },
+                grid: { display: false }
+              }
+            }
+          }
+        });
+
+        const main = data.positions.filter(p => p.months_present >= 10);
+        new Chart(document.getElementById('monthlyByPos'), {
+          type: 'line',
+          data: {
+            labels: data.months,
+            datasets: main.map((p, i) => ({
+              label: p.position,
+              data: p.monthly_avg,
+              borderColor: palette[i % palette.length],
+              backgroundColor: palette[i % palette.length],
+              tension: 0.25,
+              spanGaps: true,
+              pointRadius: 3
+            }))
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { position: 'bottom' },
+              tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${c.raw == null ? 'нет данных' : money(c.raw)}` } }
+            },
+            scales: {
+              y: {
+                title: { display: true, text: 'Средняя ЗП, ₽' },
+                ticks: { callback: (v) => fmt(v) },
+                grid: { color: '#ece7dc' }
+              },
+              x: {
+                title: { display: true, text: 'Месяц' },
+                grid: { display: false }
+              }
+            }
+          }
+        });
+      })
+      .catch(err => {
+        document.body.innerHTML = '<p style="padding:24px">Не удалось загрузить report_data.json: ' + err + '</p>';
+      });
+  </script>
+</body>
+</html>
